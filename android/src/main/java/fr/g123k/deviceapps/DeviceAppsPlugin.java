@@ -270,7 +270,15 @@ public class DeviceAppsPlugin implements
                 Drawable icon = packageManager.getApplicationIcon(pInfo.packageName);
                 String encodedImage = encodeToBase64(getBitmapFromDrawable(icon), Bitmap.CompressFormat.PNG, 100);
                 map.put(AppDataConstants.APP_ICON, encodedImage);
-            } catch (PackageManager.NameNotFoundException ignored) {
+            } catch (Exception e) {
+                // Defensive: an exotic Drawable (OEM-skinned, malformed adaptive
+                // icon, etc.) must not crash the executor and kill the whole list.
+                Log.w(LOG_TAG, "Failed to load icon for " + pInfo.packageName + ", using transparent placeholder", e);
+                map.put(AppDataConstants.APP_ICON,
+                        encodeToBase64(
+                                Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888),
+                                Bitmap.CompressFormat.PNG,
+                                100));
             }
         }
 
