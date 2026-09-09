@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -13,6 +14,8 @@ import java.util.Set;
 import io.flutter.plugin.common.EventChannel;
 
 public class DeviceAppsChangedListener {
+
+    private static final String LOG_TAG = "DEVICE_APPS";
 
     private final DeviceAppsChangedListenerInterface callback;
     private final Set<EventChannel.EventSink> sinks;
@@ -26,23 +29,24 @@ public class DeviceAppsChangedListener {
 
     public void register(@NonNull Context context, EventChannel.EventSink events) {
         if (appsBroadcastReceiver == null) {
-            createBroadcastReceiver();
+            BroadcastReceiver receiver = createBroadcastReceiver();
+
+            IntentFilter intentFilter = new IntentFilter();
+            intentFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
+            intentFilter.addAction(Intent.ACTION_PACKAGE_REPLACED);
+            intentFilter.addAction(Intent.ACTION_PACKAGE_CHANGED);
+            intentFilter.addAction(Intent.ACTION_PACKAGE_REMOVED);
+            intentFilter.addDataScheme("package");
+
+            context.registerReceiver(receiver, intentFilter);
+            appsBroadcastReceiver = receiver;
         }
 
-        IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
-        intentFilter.addAction(Intent.ACTION_PACKAGE_REPLACED);
-        intentFilter.addAction(Intent.ACTION_PACKAGE_CHANGED);
-        intentFilter.addAction(Intent.ACTION_PACKAGE_REMOVED);
-        intentFilter.addDataScheme("package");
-
         sinks.add(events);
-
-        context.registerReceiver(appsBroadcastReceiver, intentFilter);
     }
 
-    private void createBroadcastReceiver() {
-        appsBroadcastReceiver = new BroadcastReceiver() {
+    private BroadcastReceiver createBroadcastReceiver() {
+        return new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 String packageName = intent.getDataString().replace("package:", "");
@@ -100,7 +104,14 @@ public class DeviceAppsChangedListener {
 
     public void unregister(@NonNull Context context) {
         if (appsBroadcastReceiver != null) {
-            context.unregisterReceiver(appsBroadcastReceiver);
+            try {
+                context.unregisterReceiver(appsBroadcastReceiver);
+            } catch (IllegalArgumentException e) {
+                // Defensive only: register() assigns the field after a successful
+                // registerReceiver, so this is not expected to be reachable.
+                Log.w(LOG_TAG, "Failed to unregister apps broadcast receiver", e);
+            }
+            appsBroadcastReceiver = null;
         }
 
         sinks.clear();
